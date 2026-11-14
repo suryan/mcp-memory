@@ -1,0 +1,40 @@
+[package]
+name = "mcp-memory"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.97"
+description = "MCP memory server. Statements, entities, and vectors live in an embedded HelixDB graph."
+license = "Apache-2.0"
+publish = false
+
+[dependencies]
+# Pinned to the v3.7.0 tag. crates.io helix-db 3.0.0 has no embedded engine.
+helix-db = { git = "https://github.com/HelixDB/helix-db", tag = "v3.7.0", features = ["embedded"] }
+rmcp = { version = "3.10.0", features = ["server", "transport-io", "macros"] }
+tokio = { version = "1.49.0", features = ["fs", "io-std", "macros", "process", "rt-multi-thread", "sync", "time"] }
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.149"
+clap = { version = "4.5.60", features = ["derive"] }
+thiserror = "2.0.18"
+tracing = "0.1.44"
+tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
+sha2 = "0.10.9"
+chrono = { version = "0.4.44", default-features = false, features = ["clock", "std"] }
+uuid = { version = "1.23.0", features = ["v4"] }
+toml = "0.9.8"
+schemars = { version = "1.2.3", features = ["chrono04"] }
+
+[dev-dependencies]
+tempfile = "3.27.0"
+
+# Replacements for transitive crates the scanner flags. Each copy bumps a
+# dependency, swaps in a maintained library, or drops the crate.
+[patch.crates-io]
+object_store = { path = "third_party/object_store" }
+tantivy = { path = "third_party/tantivy" }
+figment = { path = "third_party/figment" }
+foyer-common = { path = "third_party/foyer-common" }
+foyer-memory = { path = "third_party/foyer-memory" }
+
+[patch."https://github.com/HelixDB/helix-db"]
+db = { path = "third_party/helix-db" }

@@ -1,0 +1,28 @@
+shape: sequence_diagram
+
+"Coding harness": {
+  icon: https://raw.githubusercontent.com/devicons/devicon/master/icons/vscode/vscode-original.svg
+}
+"MCP server": {
+  icon: https://cdn.simpleicons.org/modelcontextprotocol
+}
+"Embedding model"
+HelixDB: {
+  icon: https://cdn.simpleicons.org/rust
+}
+
+"Coding harness" -> "MCP server": "memory_recall(query, project_path)"
+"MCP server" -> "Embedding model": "embed query"
+"Embedding model" -> "MCP server": "query vector"
+"MCP server" -> HelixDB: "traverse, then BM25 and vector rank"
+HelixDB -> "MCP server": "ranked active memories"
+"MCP server" -> "Coding harness": "hits, or empty when below the floor"
+
+"Coding harness" -> "MCP server": "memory_remember(statement, entities)"
+"MCP server" -> "Embedding model": "embed statement"
+"Embedding model" -> "MCP server": "memory vector"
+"MCP server" -> HelixDB: "commit node and embedding"
+HelixDB -> "MCP server": "committed"
+"MCP server" -> HelixDB: "write entity edges"
+HelixDB -> "MCP server": "linked"
+"MCP server" -> "Coding harness": "created, updated, or superseded"

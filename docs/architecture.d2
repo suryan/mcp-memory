@@ -1,0 +1,24 @@
+direction: right
+
+"Coding harness": {
+  shape: rectangle
+  icon: https://raw.githubusercontent.com/devicons/devicon/master/icons/vscode/vscode-original.svg
+}
+
+"MCP server": {
+  shape: rectangle
+  icon: https://cdn.simpleicons.org/modelcontextprotocol
+}
+
+"Embedding model": {
+  shape: rectangle
+}
+
+HelixDB: {
+  shape: cylinder
+  icon: https://cdn.simpleicons.org/rust
+}
+
+"Coding harness" -> "MCP server": "stdio MCP"
+"MCP server" -> "Embedding model": "embed in process"
+"MCP server" -> HelixDB: "one prefiltered query"
