@@ -181,7 +181,7 @@ impl ClaimSequenceAllocator {
     pub(crate) fn next(&self) -> Result<ClaimSequence> {
         let raw = self
             .next
-            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |value| {
+            .try_update(Ordering::Relaxed, Ordering::Relaxed, |value| {
                 value.checked_add(1)
             })
             .map_err(|_| HelixDbError::IdentifierExhausted("index claim sequence"))?;

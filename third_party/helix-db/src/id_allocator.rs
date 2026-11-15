@@ -321,7 +321,7 @@ impl IdAllocator {
     fn claim_ids(&self, count: u64) -> Result<std::ops::Range<u64>> {
         let start = self
             .next_id
-            .fetch_update(Ordering::AcqRel, Ordering::Acquire, |next| {
+            .try_update(Ordering::AcqRel, Ordering::Acquire, |next| {
                 next.checked_add(count)
             })
             .map_err(|_| {

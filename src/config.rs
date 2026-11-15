@@ -1,3 +1,5 @@
+//! User configuration in `config.toml`, and the data directory layout.
+
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -6,16 +8,26 @@ use serde::{Deserialize, Serialize};
 use crate::access::Access;
 use crate::model::{CONTENT_LIMIT, SUMMARY_LIMIT, TITLE_LIMIT};
 
+/// Settings read on every request, so CLI changes apply without a restart.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
+    /// What the agent may do.
     pub access: Access,
+    /// When true, agent writes are limited to `trusted_repos`.
     pub require_trust: bool,
+    /// Repository keys the agent may write to when `require_trust` is set.
     pub trusted_repos: Vec<String>,
+    /// Path prefix to repository key, for checkouts with no usable remote.
     pub repo_overrides: Vec<(String, String)>,
+    /// Most hits a recall returns.
     pub recall_limit: usize,
+    /// Byte budget for one recall result.
     pub recall_bytes: usize,
+    /// The space every query is scoped to.
     pub space_id: String,
+    /// The principal recorded on writes.
     pub principal_id: String,
+    /// Where the graph, socket, and log live.
     pub data_dir: PathBuf,
 }
 
@@ -36,6 +48,11 @@ impl Default for Config {
 }
 
 impl Config {
+    /// Read `config.toml`. A missing file gives the defaults; missing keys keep their defaults.
+    ///
+    /// # Errors
+    ///
+    /// Returns a message when the file cannot be read, is not valid TOML, or names an unknown access mode.
     pub fn load(path: &Path) -> Result<Self, String> {
         if !path.exists() {
             return Ok(Self::default());
@@ -76,6 +93,11 @@ impl Config {
         Ok(config)
     }
 
+    /// Write every setting to `config.toml`, creating its directory.
+    ///
+    /// # Errors
+    ///
+    /// Returns a message when the directory or file cannot be written.
     pub fn save(&self, path: &Path) -> Result<(), String> {
         if let Some(parent) = path.parent() {
             fs::create_dir_all(parent).map_err(|error| error.to_string())?;
@@ -103,6 +125,7 @@ impl Config {
         fs::write(path, text).map_err(|error| error.to_string())
     }
 
+    /// Whether agent writes to this repository are allowed under `require_trust`.
     pub fn allows_repo(&self, repo_key: &str) -> bool {
         !self.require_trust || self.trusted_repos.iter().any(|item| item == repo_key)
     }
@@ -127,10 +150,12 @@ struct RepoOverride {
     repo_key: String,
 }
 
+/// `config.toml` in the default data directory. Its `data_dir` may point elsewhere.
 pub fn config_path() -> PathBuf {
     default_data_dir().join("config.toml")
 }
 
+/// `$MCP_MEMORY_HOME`, else `$XDG_DATA_HOME/mcp-memory`, else `~/.local/share/mcp-memory`.
 pub fn default_data_dir() -> PathBuf {
     if let Ok(path) = std::env::var("MCP_MEMORY_HOME") {
         return PathBuf::from(path);
@@ -142,6 +167,11 @@ pub fn default_data_dir() -> PathBuf {
     base.join("mcp-memory")
 }
 
+/// Enforce statement size: title and summary in characters, content in bytes.
+///
+/// # Errors
+///
+/// Returns the reason shown to the agent when a field is too long or title or content is empty.
 pub fn check_bounds(title: &str, summary: &str, content: &str) -> Result<(), String> {
     if title.chars().count() > TITLE_LIMIT {
         return Err(format!("title is longer than {TITLE_LIMIT} characters"));

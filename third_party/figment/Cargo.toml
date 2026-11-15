@@ -132,5 +132,5 @@ test = [
 ]
 yaml = ["serde-saphyr"]
 
-[target."cfg(any(target_pointer_width = \"8\", target_pointer_width = \"16\", target_pointer_width = \"32\"))".dependencies.atomic]
+[target."cfg(any(target_pointer_width = \"16\", target_pointer_width = \"32\"))".dependencies.atomic]
 version = "0.6.0"

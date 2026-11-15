@@ -1,4 +1,8 @@
+//! Local text embedding. Nothing leaves the machine.
+
+/// Vector dimension stored on memory nodes. A later model must keep it or reindex.
 pub const EMBED_DIM: usize = 384;
+/// Recorded so a model change is detectable. Health reports it.
 pub const MODEL_ID: &str = "token-hash-v1";
 
 /// Local embedder. Token hashes keep recall working with no model download.
@@ -17,6 +21,7 @@ pub fn embed(text: &str) -> Vec<f32> {
     vector
 }
 
+/// Cosine distance: 0 is identical direction, 1 is unrelated. A zero vector is distance 1.
 pub fn cosine_distance(left: &[f32], right: &[f32]) -> f32 {
     let mut dot = 0.0f32;
     let mut left_norm = 0.0f32;
@@ -34,7 +39,8 @@ pub fn cosine_distance(left: &[f32], right: &[f32]) -> f32 {
 
 fn add_feature(vector: &mut [f32], token: &str, weight: f32) {
     let hash = fnv(token.as_bytes());
-    let index = (hash as usize) % EMBED_DIM;
+    let buckets = u64::try_from(EMBED_DIM).unwrap_or(u64::MAX);
+    let index = usize::try_from(hash % buckets).unwrap_or(0);
     let sign = if hash & 1 == 0 { 1.0 } else { -1.0 };
     vector[index] += sign * weight;
 }
@@ -52,7 +58,7 @@ fn normalize(vector: &mut [f32]) {
 fn tokenize(text: &str) -> Vec<String> {
     text.split(|c: char| !c.is_alphanumeric())
         .filter(|token| token.len() > 2)
-        .map(|token| token.to_ascii_lowercase())
+        .map(str::to_ascii_lowercase)
         .collect()
 }
 

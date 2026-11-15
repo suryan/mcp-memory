@@ -269,24 +269,6 @@ where
     where
         V: serde::de::Visitor<'de>,
     {
-        impl<'de, 'a, R: 'a, O> serde::de::EnumAccess<'de> for &'a mut Deserializer<R, O>
-        where
-            R: BincodeRead<'de>,
-            O: Options,
-        {
-            type Error = Error;
-            type Variant = Self;
-
-            fn variant_seed<V>(self, seed: V) -> Result<(V::Value, Self::Variant)>
-            where
-                V: serde::de::DeserializeSeed<'de>,
-            {
-                let idx: u32 = O::IntEncoding::deserialize_u32(self)?;
-                let val: Result<_> = seed.deserialize(idx.into_deserializer());
-                Ok((val?, self))
-            }
-        }
-
         visitor.visit_enum(self)
     }
 
@@ -455,6 +437,24 @@ where
 
     fn is_human_readable(&self) -> bool {
         false
+    }
+}
+
+impl<'de, 'a, R: 'a, O> serde::de::EnumAccess<'de> for &'a mut Deserializer<R, O>
+where
+    R: BincodeRead<'de>,
+    O: Options,
+{
+    type Error = Error;
+    type Variant = Self;
+
+    fn variant_seed<V>(self, seed: V) -> Result<(V::Value, Self::Variant)>
+    where
+        V: serde::de::DeserializeSeed<'de>,
+    {
+        let idx: u32 = O::IntEncoding::deserialize_u32(self)?;
+        let val: Result<_> = seed.deserialize(idx.into_deserializer());
+        Ok((val?, self))
     }
 }
 

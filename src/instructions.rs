@@ -1,3 +1,6 @@
+//! Server instructions sent to the harness at initialize.
+
+/// The recall and remember policy the model sees. Part of the product, not a hint.
 pub const INSTRUCTIONS: &str = "\
 Memory is a local knowledge graph of durable working context. It is not a transcript and it does not replace project rules.
 

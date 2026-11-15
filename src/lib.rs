@@ -1,10 +1,11 @@
 //! MCP memory server. The agent stores and recalls durable statements.
-//! HelixDB holds the knowledge graph in-process.
+//! `HelixDB` holds the knowledge graph inside one store process per data directory.
 
 #![recursion_limit = "256"]
 
 pub mod access;
 pub mod config;
+pub mod daemon;
 pub mod embed;
 pub mod identity;
 pub mod instructions;

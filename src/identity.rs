@@ -1,3 +1,5 @@
+//! Repository identity used to scope repository memories.
+
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -16,6 +18,8 @@ pub fn repo_key(path: &Path, overrides: &[(String, String)]) -> String {
     display.to_string()
 }
 
+/// Reduce a git remote to `host/path`: scheme, `git@`, and `.git` removed, host lowercased.
+/// SSH and HTTPS remotes of the same repository give the same key.
 pub fn normalize_remote(url: &str) -> String {
     let mut value = url.trim().trim_end_matches('/').to_string();
     if let Some(rest) = value.strip_prefix("git@") {

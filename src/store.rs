@@ -1,3 +1,5 @@
+//! The `HelixDB` graph: schema, writes, and the one-request recall.
+
 use std::path::Path;
 
 use helix_db::dsl::prelude::*;
@@ -13,51 +15,92 @@ use crate::model::{
 };
 use crate::rank::{self, Candidate, RankedHit};
 
+/// A graph operation failed.
 #[derive(Debug, Error)]
 pub enum StoreError {
+    /// Helix returned an error or an unexpected shape.
     #[error("graph: {0}")]
     Graph(String),
+    /// The request is invalid for the stored data.
     #[error("{0}")]
     Rejected(String),
 }
 
+/// A validated write, already scoped to a space and repository.
 #[derive(Debug, Clone)]
 pub struct RememberRequest {
+    /// Update this memory in place instead of creating one.
     pub id: Option<String>,
+    /// Mark this memory superseded by the new one.
     pub supersedes: Option<String>,
+    /// One-line title.
     pub title: String,
+    /// One-line summary.
     pub summary: String,
+    /// Statement body.
     pub content: String,
+    /// Memory type.
     pub memory_type: MemoryType,
+    /// Scope.
     pub scope: Scope,
+    /// Repository key. Ignored for global memories.
     pub repo_key: String,
+    /// Owning space.
     pub space_id: String,
+    /// Writing principal.
     pub principal_id: String,
+    /// `user` or `automatic`.
     pub source: String,
+    /// Entities to link with `ABOUT`.
     pub entities: Vec<EntityInput>,
+    /// Typed links between entities, with this memory as evidence.
     pub relations: Vec<RelationInput>,
 }
 
+/// What a write did.
 #[derive(Debug, Clone)]
 pub enum Remembered {
-    Created { id: String },
-    Updated { id: String },
-    Superseded { id: String },
-    Duplicate { id: String },
+    /// A new memory.
+    Created {
+        /// New memory id.
+        id: String,
+    },
+    /// An existing memory was changed in place.
+    Updated {
+        /// Updated memory id.
+        id: String,
+    },
+    /// A new memory replaced an older one.
+    Superseded {
+        /// New memory id.
+        id: String,
+    },
+    /// A near-identical active memory already exists; nothing was written.
+    Duplicate {
+        /// Existing memory id.
+        id: String,
+    },
 }
 
+/// Handle to the Helix database.
 pub struct Graph {
     client: Client,
 }
 
 impl Graph {
+    /// Open the on-disk graph under `root` and wait until its indexes are active.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the directory cannot be created, Helix cannot open the database
+    /// (including when another process owns it), or an index build fails.
     pub async fn open_disk(root: &Path) -> Result<Self, StoreError> {
         silence_telemetry();
         std::fs::create_dir_all(root).map_err(|error| StoreError::Graph(error.to_string()))?;
-        let client = Client::open(HelixDbSource::Disk {
+        let client = Box::pin(Client::open(HelixDbSource::Disk {
             root: root.to_path_buf(),
             database: "memory".into(),
-        })
+        }))
         .await
         .map_err(graph_err)?;
         let graph = Self { client };
@@ -65,11 +108,16 @@ impl Graph {
         Ok(graph)
     }
 
+    /// Open an in-memory graph for tests. Data is lost when it is dropped.
+    ///
+    /// # Errors
+    ///
+    /// Fails when Helix cannot open the database or an index build fails.
     pub async fn open_memory(name: &str) -> Result<Self, StoreError> {
         silence_telemetry();
-        let client = Client::open(HelixDbSource::InMemory {
+        let client = Box::pin(Client::open(HelixDbSource::InMemory {
             database: name.into(),
-        })
+        }))
         .await
         .map_err(graph_err)?;
         let graph = Self { client };
@@ -77,8 +125,14 @@ impl Graph {
         Ok(graph)
     }
 
+    /// Create the vector and text indexes if missing, and wait until each is active.
+    ///
+    /// # Errors
+    ///
+    /// Fails when an index build is aborted, blocked, or takes longer than 30 seconds.
     pub async fn ensure_schema(&self) -> Result<(), StoreError> {
-        let dimension = std::num::NonZeroUsize::new(EMBED_DIM).expect("dimension");
+        let dimension = std::num::NonZeroUsize::new(EMBED_DIM)
+            .ok_or_else(|| StoreError::Graph("embedding dimension is zero".into()))?;
         self.build_index(
             "vector",
             g().create_vector_index_nodes(
@@ -162,6 +216,12 @@ impl Graph {
         }
     }
 
+    /// Write one memory: update by id, skip a near-duplicate, or create (and optionally supersede).
+    /// The node and embedding commit together; entity links and the audit row follow.
+    ///
+    /// # Errors
+    ///
+    /// Fails when a Helix query fails.
     pub async fn remember(&self, request: RememberRequest) -> Result<Remembered, StoreError> {
         let hash = content_hash(&request.title, &request.summary, &request.content);
         let now = chrono::Utc::now().to_rfc3339();
@@ -227,6 +287,12 @@ impl Graph {
         }
     }
 
+    /// One Helix read: limit to the space and repositories, then BM25, vector, and up to two
+    /// graph hops over that set. Results are fused and trimmed to `limit` and `byte_budget`.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the Helix query fails.
     pub async fn recall(
         &self,
         space_id: &str,
@@ -334,6 +400,13 @@ impl Graph {
         Ok(rank::rank(candidates, limit, byte_budget))
     }
 
+    /// Memories in the space, newest first, at most 200. Filters are exact except `text`,
+    /// a case-insensitive substring over title, summary, and content. A repository filter
+    /// keeps global memories too.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the Helix query fails.
     pub async fn list(
         &self,
         space_id: &str,
@@ -388,6 +461,11 @@ impl Graph {
         Ok(rows)
     }
 
+    /// One memory by id within the space.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the Helix query fails.
     pub async fn get(&self, space_id: &str, id: &str) -> Result<Option<MemoryRecord>, StoreError> {
         let request = QueryRequest::read(
             read_batch()
@@ -405,6 +483,11 @@ impl Graph {
             .find(|record| record.space_id == space_id))
     }
 
+    /// Delete one memory by id and audit it. Returns false when it is not in the space.
+    ///
+    /// # Errors
+    ///
+    /// Fails when a Helix query fails.
     pub async fn forget(&self, space_id: &str, principal_id: &str, id: &str) -> Result<bool, StoreError> {
         let Some(_) = self.get(space_id, id).await? else {
             return Ok(false);
@@ -429,6 +512,11 @@ impl Graph {
         Ok(true)
     }
 
+    /// Entities linked from the named entity, and memories `ABOUT` it.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the Helix query fails.
     pub async fn neighbors(
         &self,
         space_id: &str,
@@ -468,6 +556,11 @@ impl Graph {
         Ok(items)
     }
 
+    /// Memories and entities in the space, without embeddings or entity links.
+    ///
+    /// # Errors
+    ///
+    /// Fails when a Helix query fails.
     pub async fn export_space(&self, space_id: &str) -> Result<ExportDocument, StoreError> {
         let memories = self.list(space_id, None, None, None, None).await?;
         let entities = self.list_entities(space_id).await?;
@@ -479,6 +572,12 @@ impl Graph {
         })
     }
 
+    /// Insert memories from an export, re-embedding each. Idempotent on memory id; a changed
+    /// content hash marks the stored memory `conflicted`. Returns how many were inserted.
+    ///
+    /// # Errors
+    ///
+    /// Fails when a Helix query fails.
     pub async fn import_space(
         &self,
         space_id: &str,
@@ -682,7 +781,7 @@ impl Graph {
             }
             let distance = row
                 .get("$distance")
-                .and_then(|value| value.as_f64())
+                .and_then(Value::as_f64)
                 .unwrap_or(1.0);
             if distance < 0.08 {
                 return Ok(Some(field(&row, "memory_id")));
@@ -1036,12 +1135,12 @@ fn candidates_from(
                 return None;
             }
             let vector_distance = if vector {
-                row.get("$distance").and_then(|item| item.as_f64()).map(|item| item as f32)
+                row.get("$distance").and_then(Value::as_f64)
             } else {
                 None
             };
             let text_score = if !vector && !graph {
-                row.get("$score").and_then(|item| item.as_f64()).map(|item| item as f32)
+                row.get("$score").and_then(Value::as_f64)
             } else {
                 None
             };

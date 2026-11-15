@@ -1299,7 +1299,7 @@ fn disk_usage_sync(root: Option<&Path>) -> Result<(u64, u64), HelixDbError> {
 }
 
 fn atomic_saturating_sub(value: &AtomicU64, amount: u64) {
-    let _ = value.fetch_update(Ordering::Relaxed, Ordering::Relaxed, |current| {
+    let _ = value.try_update(Ordering::Relaxed, Ordering::Relaxed, |current| {
         Some(current.saturating_sub(amount))
     });
 }

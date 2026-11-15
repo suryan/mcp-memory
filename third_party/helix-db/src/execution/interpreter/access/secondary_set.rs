@@ -67,7 +67,7 @@ impl SharedIndexReads {
     pub(super) fn take(&self, wanted: usize) -> ExtraIndexReads<'_> {
         let (Ok(free) | Err(free)) =
             self.0
-                .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |free| {
+                .try_update(Ordering::SeqCst, Ordering::SeqCst, |free| {
                     Some(free - free.min(wanted))
                 });
         ExtraIndexReads {

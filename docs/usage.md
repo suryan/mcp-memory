@@ -24,9 +24,15 @@ The binary is `target/release/mcp-memory`. Put that path in the harness config, 
 }
 ```
 
-No arguments. The process serves MCP until the harness closes stdin. Logs go to stderr. If `HELIX_TELEMETRY_LEVEL` is unset, the process sets it to `off` before opening the graph.
+No arguments. The process serves MCP until the harness closes stdin. If `HELIX_TELEMETRY_LEVEL` is unset, it is set to `off` before the graph opens.
 
 The server sends its own instructions. For a client that drops them, the same policy is in [harness-snippet.md](harness-snippet.md).
+
+## Several harnesses at once
+
+Cursor, Claude Code, Codex, and the CLI can all use the store at the same time. Each harness's `mcp-memory` process forwards to one shared store process, which is the only process that opens the graph. The first harness or CLI command starts it. It exits five minutes after the last connection closes; set `MCP_MEMORY_IDLE_SECS` to change that. Its log is `daemon.log` in the data directory.
+
+Recall without `project_path` uses the directory the harness started `mcp-memory` in. After rebuilding the binary, the new version is used once the old store process has exited.
 
 ## Access
 
@@ -75,13 +81,26 @@ mcp-memory export memories.json
 mcp-memory import memories.json
 ```
 
-Export omits embeddings. Import rebuilds them. Importing the same id with different content marks that memory `conflicted` and leaves it out of recall.
+`export` writes a JSON list of statements. Embeddings are omitted and rebuilt on `import`. Entity edges are omitted. Importing the same id with different content marks that memory `conflicted` and leaves it out of recall. A full copy of the store is the data directory below.
 
 ## Where the data is
 
-`$MCP_MEMORY_HOME`, or `$XDG_DATA_HOME/mcp-memory`, or `~/.local/share/mcp-memory`.
+`mcp-memory config show` prints the directory. The default is `~/.local/share/mcp-memory`. `MCP_MEMORY_HOME` replaces that path. When `XDG_DATA_HOME` is set, the default is `$XDG_DATA_HOME/mcp-memory`.
 
-`config.toml` is in that directory. The graph is in `helix/` next to it. Stopping the process does not drop the graph.
+That directory is the store:
+
+- `config.toml` holds the access mode and the `data_dir` path.
+- `helix/` is the graph: memories, entities, edges, and embeddings.
+- `run/` holds the store process's socket and lock while it runs.
+- `daemon.log` is the store process's log.
+
+Stopping the process leaves the directory on disk.
+
+## Backup and restore
+
+Close every harness and wait for the store process to exit (no `run/mcp-memory.sock`), then copy the whole directory. That copy is the backup for an OS wipe or a new laptop. Put it back at the same path. If the home directory path changed, set `data_dir` in `config.toml` to the restored folder. The program reads `config.toml` from the default directory, then opens the graph at the `data_dir` inside that file.
+
+A repository memory keyed by a git remote still matches after the checkout moves. A repository with no remote keeps its old absolute path as the key.
 
 ## Limits of this build
 

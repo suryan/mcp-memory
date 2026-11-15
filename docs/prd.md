@@ -20,7 +20,7 @@ Coding agents drop corrections, repo commands, conventions, and ruled-out approa
 
 Two deployment profiles, one system:
 
-- **Local.** The MCP server embeds HelixDB in-process, with the graph on disk. In-memory mode is not this profile, because a stop would drop the graph. Harnesses connect over stdio through a thin adapter, or over local HTTP. One personal space, one principal, created at install. Default access is `learn`.
+- **Local.** One store process per data directory embeds HelixDB, with the graph on disk. In-memory mode is not this profile, because a stop would drop the graph. Each harness launches a stdio front end that forwards to the store process over a user-only Unix socket and starts it when absent, so several harnesses and the CLI share one writer. One personal space, one principal, created at install. Default access is `learn`.
 - **Server.** Same MCP binaries, many principals and spaces, MCP over HTTP. The process refuses to start unless authentication is configured and every query is scoped to the caller's spaces. Helix runs highly available: object storage is the durable store, one writer commits, and readers scale with recall load. MCP replicas are stateless and share that cluster. This profile is Helix Cloud or the enterprise cluster. The open-source single-node server is not the server profile.
 
 Memory content is not sent to an embedding API. The embedding model runs in the MCP process, pinned by id and dimension, and the vector is stored on the memory node. A model change builds a new vector index and backfills it; mixed dimensions in one index are a hard error. If the model fails to load, recall still answers from full-text plus the graph walk, and the result says the vector leg is degraded.
@@ -147,7 +147,7 @@ One store is the efficiency requirement. A relational database plus a vector ser
 - BM25 full-text on title, summary, and content, prefiltered by the same traversal.
 - Lookup indexes on `(space_id, repo_key, id)` and entity `(space_id, repo_key, name)`.
 - Uniqueness constraints on memory id and on entity identity inside a space.
-- Recall is one Helix request. The hop limit is two. Result size is capped at 5 hits and about 8 KB. On the local profile that request stays in-process.
+- Recall is one Helix request. The hop limit is two. Result size is capped at 5 hits and about 8 KB. On the local profile that request stays inside the store process.
 - Writes use one transaction. Supersede marks the old memory superseded in that transaction, and later recalls do not traverse it.
 
 Default embedding model is a pinned, versioned, locally run model with a recorded dimension. English paraphrase recall is an acceptance gate. Other languages are best-effort until a model change and reindex explicitly adopts them. Export omits embeddings; import backfills them onto the nodes.
@@ -235,5 +235,5 @@ Ship a one-page snippet for clients that do not inject server instructions. Do n
 
 ## Status
 
-The local profile is implemented: stdio MCP server, CLI, embedded Helix graph, and tests. The embedding model in this build is `token-hash-v1` (384 dimensions), not a semantic model. Health says so. The admin HTTP API, the multi-tenant server profile, and the 1M-memory scale gate are not done. Architecture and the local workflow are in [architecture.md](architecture.md) and [development.md](development.md). Day-to-day use is in [usage.md](usage.md). Harness setup is in [harness-snippet.md](harness-snippet.md).
+The local profile is implemented: stdio MCP front end, shared store process, CLI, embedded Helix graph, and tests, including two harness processes and the CLI using one store at once. The embedding model in this build is `token-hash-v1` (384 dimensions), not a semantic model. Health says so. The admin HTTP API, the multi-tenant server profile, and the 1M-memory scale gate are not done. Architecture and the local workflow are in [architecture.md](architecture.md) and [development.md](development.md). Day-to-day use is in [usage.md](usage.md). Harness setup is in [harness-snippet.md](harness-snippet.md).
 

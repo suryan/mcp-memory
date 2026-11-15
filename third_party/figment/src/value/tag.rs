@@ -16,10 +16,10 @@ use crate::profile::{Profile, ProfileTag};
 #[derive(Copy, Clone)]
 pub struct Tag(u64);
 
-#[cfg(any(target_pointer_width = "8", target_pointer_width = "16", target_pointer_width = "32"))]
+#[cfg(any(target_pointer_width = "16", target_pointer_width = "32"))]
 static COUNTER: atomic::Atomic<u64> = atomic::Atomic::new(1);
 
-#[cfg(not(any(target_pointer_width = "8", target_pointer_width = "16", target_pointer_width = "32")))]
+#[cfg(not(any(target_pointer_width = "16", target_pointer_width = "32")))]
 static COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
 
 

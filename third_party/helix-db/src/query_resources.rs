@@ -121,7 +121,7 @@ impl Budget {
             (&self.0.scan_rows, reads.scan_rows),
         ] {
             if amount > 0 {
-                let _ = counter.fetch_update(Ordering::Relaxed, Ordering::Relaxed, |value| {
+                let _ = counter.try_update(Ordering::Relaxed, Ordering::Relaxed, |value| {
                     Some(value.saturating_add(amount))
                 });
             }
@@ -246,7 +246,7 @@ impl Reservation {
             self.budget
                 .0
                 .used
-                .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |used| {
+                .try_update(Ordering::Relaxed, Ordering::Relaxed, |used| {
                     used.checked_add(additional)
                         .filter(|total| *total <= self.budget.0.limit)
                 })

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Pre-commit gate: tests, diagrams, and the osv-scanner CVE check.
+# Pre-commit gate: lints, tests, diagrams, and the osv-scanner CVE check.
 # Usage: bash scripts/precommit.sh
 set -euo pipefail
 
@@ -8,17 +8,20 @@ cd "$root"
 
 echo "=== Pre-commit checks ==="
 
-echo "[1/3] Build and tests..."
+echo "[1/4] Lints (clippy, warnings are errors)..."
 export CARGO_TARGET_DIR="$root/target"
 # /tmp is a small tmpfs. Cargo and d2's headless browser both fail there.
 export TMPDIR="$root/target/tmp"
 mkdir -p "$TMPDIR"
+cargo clippy --all-targets -- -D warnings
+
+echo "[2/4] Build and tests..."
 cargo test
 
-echo "[2/3] Docs diagrams..."
+echo "[3/4] Docs diagrams..."
 scripts/render-docs.sh
 
-echo "[3/3] Security audit (osv-scanner)..."
+echo "[4/4] Security audit (osv-scanner)..."
 if command -v osv-scanner >/dev/null 2>&1; then
   osv-scanner scan source --recursive . || {
     echo "  FAIL: vulnerabilities found (see above)"

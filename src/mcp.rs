@@ -1,3 +1,5 @@
+//! MCP tools and the digest resource for one harness connection.
+
 use std::sync::Arc;
 
 use rmcp::handler::server::wrapper::Parameters;
@@ -14,16 +16,28 @@ use serde_json::json;
 use crate::access::Actor;
 use crate::instructions::INSTRUCTIONS;
 use crate::model::{EntityInput, RelationInput};
-use crate::service::Service;
+use crate::service::{Draft, Service};
 
+/// One harness session over the shared service.
 #[derive(Clone)]
 pub struct MemoryServer {
     service: Arc<Service>,
+    /// The harness's working directory. The shared process runs elsewhere, so
+    /// its own directory says nothing about the repository in play.
+    default_path: Option<String>,
 }
 
 impl MemoryServer {
-    pub fn new(service: Arc<Service>) -> Self {
-        Self { service }
+    /// A session whose recall and writes default to `default_path`.
+    pub fn new(service: Arc<Service>, default_path: Option<String>) -> Self {
+        Self {
+            service,
+            default_path,
+        }
+    }
+
+    fn project_path(&self, requested: Option<String>) -> Option<String> {
+        requested.or_else(|| self.default_path.clone())
     }
 }
 
@@ -31,7 +45,7 @@ impl MemoryServer {
 struct RecallArgs {
     /// The task, in the agent's own words.
     query: String,
-    /// Repository path. Defaults to the server process directory.
+    /// Repository path. Defaults to the harness working directory.
     #[serde(default)]
     project_path: Option<String>,
     /// Optional memory types to keep.
@@ -108,9 +122,10 @@ struct GraphArgs {
 impl MemoryServer {
     #[tool(description = "Recall active memories for the current task. Returns no hits when nothing is relevant.")]
     async fn memory_recall(&self, Parameters(args): Parameters<RecallArgs>) -> String {
+        let project_path = self.project_path(args.project_path);
         match self
             .service
-            .recall(Actor::Agent, &args.query, args.project_path.as_deref(), &args.types)
+            .recall(Actor::Agent, &args.query, project_path.as_deref(), &args.types)
             .await
         {
             Ok(value) => value.to_string(),
@@ -141,17 +156,19 @@ impl MemoryServer {
             .service
             .remember(
                 Actor::Agent,
-                args.explicit,
-                args.title,
-                args.summary,
-                args.content,
-                &args.memory_type,
-                &args.scope,
-                args.project_path.as_deref(),
-                args.id,
-                args.supersedes,
-                entities,
-                relations,
+                Draft {
+                    explicit: args.explicit,
+                    title: args.title,
+                    summary: args.summary,
+                    content: args.content,
+                    memory_type: args.memory_type,
+                    scope: args.scope,
+                    project_path: self.project_path(args.project_path),
+                    id: args.id,
+                    supersedes: args.supersedes,
+                    entities,
+                    relations,
+                },
             )
             .await
         {
@@ -196,6 +213,7 @@ impl MemoryServer {
 }
 
 #[tool_handler]
+#[allow(clippy::unused_async_trait_impl, reason = "rmcp's tool_handler generates async trait methods")]
 impl ServerHandler for MemoryServer {
     fn get_info(&self) -> ServerConfig {
         ServerConfig::new(
@@ -229,12 +247,16 @@ impl ServerHandler for MemoryServer {
     ) -> impl std::future::Future<Output = Result<rmcp::model::ReadResourceResponse, ErrorData>> + Send
     {
         let service = Arc::clone(&self.service);
-        let uri = request.uri.clone();
+        let default_path = self.default_path.clone();
+        let uri = request.uri;
         async move {
             if uri != "memory://digest" {
                 return Err(ErrorData::invalid_params("unknown memory resource", None));
             }
-            let text = service.digest(None).await.unwrap_or_else(|error| error.to_string());
+            let text = service
+                .digest(default_path.as_deref())
+                .await
+                .unwrap_or_else(|error| error.to_string());
             Ok(ReadResourceResult::new(vec![ResourceContents::text(text, uri)]).into())
         }
     }

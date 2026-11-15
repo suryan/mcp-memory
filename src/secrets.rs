@@ -1,3 +1,5 @@
+//! Rejects secret-shaped text before it is stored.
+
 /// Reject values that look like credentials. The stored text is not logged.
 pub fn looks_like_secret(text: &str) -> bool {
     let lower = text.to_ascii_lowercase();

@@ -3,26 +3,35 @@ shape: sequence_diagram
 "Coding harness": {
   icon: https://raw.githubusercontent.com/devicons/devicon/master/icons/vscode/vscode-original.svg
 }
-"MCP server": {
+"Stdio front end": {
   icon: https://cdn.simpleicons.org/modelcontextprotocol
 }
+"Store process"
 "Embedding model"
 HelixDB: {
   icon: https://cdn.simpleicons.org/rust
 }
 
-"Coding harness" -> "MCP server": "memory_recall(query, project_path)"
-"MCP server" -> "Embedding model": "embed query"
-"Embedding model" -> "MCP server": "query vector"
-"MCP server" -> HelixDB: "traverse, then BM25 and vector rank"
-HelixDB -> "MCP server": "ranked active memories"
-"MCP server" -> "Coding harness": "hits, or empty when below the floor"
+"Coding harness" -> "Stdio front end": "launch over stdio"
+"Stdio front end" -> "Store process": "connect to socket, or start it and wait"
+"Store process" -> HelixDB: "take lock, open graph (first start only)"
+"Stdio front end" -> "Store process": "hello with harness working directory"
 
-"Coding harness" -> "MCP server": "memory_remember(statement, entities)"
-"MCP server" -> "Embedding model": "embed statement"
-"Embedding model" -> "MCP server": "memory vector"
-"MCP server" -> HelixDB: "commit node and embedding"
-HelixDB -> "MCP server": "committed"
-"MCP server" -> HelixDB: "write entity edges"
-HelixDB -> "MCP server": "linked"
-"MCP server" -> "Coding harness": "created, updated, or superseded"
+"Coding harness" -> "Stdio front end": "memory_recall(query)"
+"Stdio front end" -> "Store process": "forward MCP request"
+"Store process" -> "Embedding model": "embed query"
+"Embedding model" -> "Store process": "query vector"
+"Store process" -> HelixDB: "traverse, then BM25 and vector rank"
+HelixDB -> "Store process": "ranked active memories"
+"Store process" -> "Coding harness": "hits, or empty when below the floor"
+
+"Coding harness" -> "Stdio front end": "memory_remember(statement, entities)"
+"Stdio front end" -> "Store process": "forward MCP request"
+"Store process" -> "Store process": "take write lock"
+"Store process" -> "Embedding model": "embed statement"
+"Embedding model" -> "Store process": "memory vector"
+"Store process" -> HelixDB: "duplicate check, then commit node and embedding"
+HelixDB -> "Store process": "committed"
+"Store process" -> HelixDB: "write entity edges"
+HelixDB -> "Store process": "linked"
+"Store process" -> "Coding harness": "created, updated, or superseded"

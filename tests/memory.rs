@@ -1,16 +1,24 @@
+//! Service behaviour over an in-memory graph: recall, access modes, secrets, and supersession.
+
+#![allow(clippy::unwrap_used, reason = "helpers set up fixtures; a failure there fails the test")]
+
 use std::path::PathBuf;
+
+use serde_json::json;
 
 use mcp_memory::access::Actor;
 use mcp_memory::config::{self, Config};
 use mcp_memory::model::EntityInput;
-use mcp_memory::service::Service;
+use mcp_memory::service::{Draft, Service};
 use mcp_memory::store::Graph;
 
 fn config_for(dir: &std::path::Path, access: mcp_memory::access::Access) -> (Config, PathBuf) {
-    let mut config = Config::default();
-    config.access = access;
-    config.data_dir = dir.to_path_buf();
-    config.space_id = "personal".into();
+    let config = Config {
+        access,
+        data_dir: dir.to_path_buf(),
+        space_id: "personal".into(),
+        ..Config::default()
+    };
     let path = dir.join("config.toml");
     config.save(&path).unwrap();
     (config, path)
@@ -19,7 +27,7 @@ fn config_for(dir: &std::path::Path, access: mcp_memory::access::Access) -> (Con
 async fn service(dir: &std::path::Path, access: mcp_memory::access::Access) -> Service {
     let (_config, path) = config_for(dir, access);
     let graph = Graph::open_memory(&format!("test-{}", uuid::Uuid::new_v4())).await.unwrap();
-    Service::open_graph(graph, path).await
+    Service::open_graph(graph, path)
 }
 
 #[tokio::test]
@@ -29,20 +37,20 @@ async fn recall_uses_a_stored_fact_and_skips_another_repo() {
     let created = service
         .remember(
             Actor::Agent,
-            false,
-            "Seed the database".into(),
-            "Integration tests fail until the local database is seeded".into(),
-            "Run the seed command before integration tests.".into(),
-            "fact",
-            "repository",
-            Some("/tmp/repo-a"),
-            None,
-            None,
-            vec![EntityInput {
-                name: "integration tests".into(),
-                kind: "command".into(),
-            }],
-            vec![],
+            Draft {
+                explicit: false,
+                title: "Seed the database".into(),
+                summary: "Integration tests fail until the local database is seeded".into(),
+                content: "Run the seed command before integration tests.".into(),
+                memory_type: "fact".into(),
+                scope: "repository".into(),
+                project_path: Some("/tmp/repo-a".into()),
+                entities: vec![EntityInput {
+                    name: "integration tests".into(),
+                    kind: "command".into(),
+                }],
+                ..Draft::default()
+            },
         )
         .await
         .unwrap();
@@ -58,7 +66,7 @@ async fn recall_uses_a_stored_fact_and_skips_another_repo() {
         .await
         .unwrap();
     assert_eq!(hit["action"], "recalled");
-    assert!(!hit["hits"].as_array().unwrap().is_empty());
+    assert_ne!(hit["hits"], json!([]));
 
     let other = service
         .recall(
@@ -69,7 +77,7 @@ async fn recall_uses_a_stored_fact_and_skips_another_repo() {
         )
         .await
         .unwrap();
-    assert!(other["hits"].as_array().unwrap().is_empty());
+    assert_eq!(other["hits"], json!([]));
 }
 
 #[tokio::test]
@@ -79,17 +87,15 @@ async fn read_only_rejects_agent_writes_and_human_delete_still_works() {
     let created = service
         .remember(
             Actor::Agent,
-            true,
-            "Prefer small diffs".into(),
-            "Keep edits local to the change".into(),
-            "Do not refactor unrelated code.".into(),
-            "preference",
-            "global",
-            None,
-            None,
-            None,
-            vec![],
-            vec![],
+            Draft {
+                explicit: true,
+                title: "Prefer small diffs".into(),
+                summary: "Keep edits local to the change".into(),
+                content: "Do not refactor unrelated code.".into(),
+                memory_type: "preference".into(),
+                scope: "global".into(),
+                ..Draft::default()
+            },
         )
         .await
         .unwrap();
@@ -103,17 +109,15 @@ async fn read_only_rejects_agent_writes_and_human_delete_still_works() {
     let rejected = service
         .remember(
             Actor::Agent,
-            true,
-            "Another preference".into(),
-            "summary".into(),
-            "content".into(),
-            "preference",
-            "global",
-            None,
-            None,
-            None,
-            vec![],
-            vec![],
+            Draft {
+                explicit: true,
+                title: "Another preference".into(),
+                summary: "summary".into(),
+                content: "content".into(),
+                memory_type: "preference".into(),
+                scope: "global".into(),
+                ..Draft::default()
+            },
         )
         .await
         .unwrap();
@@ -132,17 +136,15 @@ async fn secret_is_rejected_and_absent() {
     let rejected = service
         .remember(
             Actor::Agent,
-            true,
-            "token".into(),
-            "do not keep".into(),
-            "sk-live-abcdefghijklmnopqrstuvwxyz".into(),
-            "fact",
-            "global",
-            None,
-            None,
-            None,
-            vec![],
-            vec![],
+            Draft {
+                explicit: true,
+                title: "token".into(),
+                summary: "do not keep".into(),
+                content: "sk-live-abcdefghijklmnopqrstuvwxyz".into(),
+                memory_type: "fact".into(),
+                scope: "global".into(),
+                ..Draft::default()
+            },
         )
         .await
         .unwrap();
@@ -151,7 +153,7 @@ async fn secret_is_rejected_and_absent() {
         .list(Actor::Human, None, None, Some("token"), None)
         .await
         .unwrap();
-    assert!(listed["memories"].as_array().unwrap().is_empty());
+    assert_eq!(listed["memories"], json!([]));
 }
 
 #[tokio::test]
@@ -161,17 +163,15 @@ async fn second_statement_supersedes_the_first() {
     let first = service
         .remember(
             Actor::Agent,
-            true,
-            "Formatter".into(),
-            "Use the old formatter".into(),
-            "Run the legacy formatter.".into(),
-            "correction",
-            "global",
-            None,
-            None,
-            None,
-            vec![],
-            vec![],
+            Draft {
+                explicit: true,
+                title: "Formatter".into(),
+                summary: "Use the old formatter".into(),
+                content: "Run the legacy formatter.".into(),
+                memory_type: "correction".into(),
+                scope: "global".into(),
+                ..Draft::default()
+            },
         )
         .await
         .unwrap();
@@ -179,17 +179,16 @@ async fn second_statement_supersedes_the_first() {
     let second = service
         .remember(
             Actor::Agent,
-            true,
-            "Formatter".into(),
-            "Use rustfmt".into(),
-            "Run rustfmt before committing.".into(),
-            "correction",
-            "global",
-            None,
-            None,
-            Some(previous),
-            vec![],
-            vec![],
+            Draft {
+                explicit: true,
+                title: "Formatter".into(),
+                summary: "Use rustfmt".into(),
+                content: "Run rustfmt before committing.".into(),
+                memory_type: "correction".into(),
+                scope: "global".into(),
+                supersedes: Some(previous),
+                ..Draft::default()
+            },
         )
         .await
         .unwrap();
@@ -215,17 +214,15 @@ async fn automatic_write_is_rejected_in_read_write_mode() {
     let rejected = service
         .remember(
             Actor::Agent,
-            false,
-            "Auto".into(),
-            "summary".into(),
-            "content".into(),
-            "fact",
-            "global",
-            None,
-            None,
-            None,
-            vec![],
-            vec![],
+            Draft {
+                explicit: false,
+                title: "Auto".into(),
+                summary: "summary".into(),
+                content: "content".into(),
+                memory_type: "fact".into(),
+                scope: "global".into(),
+                ..Draft::default()
+            },
         )
         .await
         .unwrap();
@@ -233,19 +230,55 @@ async fn automatic_write_is_rejected_in_read_write_mode() {
     let created = service
         .remember(
             Actor::Agent,
-            true,
-            "Explicit".into(),
-            "summary".into(),
-            "The user asked to remember this.".into(),
-            "fact",
-            "global",
-            None,
-            None,
-            None,
-            vec![],
-            vec![],
+            Draft {
+                explicit: true,
+                title: "Explicit".into(),
+                summary: "summary".into(),
+                content: "The user asked to remember this.".into(),
+                memory_type: "fact".into(),
+                scope: "global".into(),
+                ..Draft::default()
+            },
         )
         .await
         .unwrap();
     assert_eq!(created["action"], "created");
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 8)]
+async fn concurrent_identical_writes_store_one_memory() {
+    let dir = tempfile::tempdir().unwrap();
+    let service = std::sync::Arc::new(service(dir.path(), mcp_memory::access::Access::Learn).await);
+    let writes = (0..8).map(|_| {
+        let service = std::sync::Arc::clone(&service);
+        tokio::spawn(async move {
+            service
+                .remember(
+                    Actor::Agent,
+                    Draft {
+                        explicit: true,
+                        title: "Package manager".into(),
+                        summary: "Use pnpm for node projects".into(),
+                        content: "Install and run scripts with pnpm.".into(),
+                        memory_type: "preference".into(),
+                        scope: "global".into(),
+                        ..Draft::default()
+                    },
+                )
+                .await
+                .unwrap()
+        })
+    });
+    let mut created = 0;
+    for write in writes {
+        if write.await.unwrap()["action"] == "created" {
+            created += 1;
+        }
+    }
+    assert_eq!(created, 1);
+    let listed = service
+        .list(Actor::Human, None, None, None, None)
+        .await
+        .unwrap();
+    assert_eq!(listed["memories"].as_array().unwrap().len(), 1);
 }
