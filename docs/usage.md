@@ -4,13 +4,27 @@
 
 ## Install
 
-From this repo, with Rust 1.99.1 (pinned in `rust-toolchain.toml`):
+### One-liner (recommended)
 
 ```bash
-cargo build --release
+curl -fsSL https://raw.githubusercontent.com/suryan/mcp-memory/main/scripts/install.sh \
+  | bash -s -- --yes
 ```
 
-The binary is `target/release/mcp-memory`. Put that path in the harness config, or install the binary onto `PATH` and use the name `mcp-memory`.
+That installs `~/.local/bin/mcp-memory` (bootstraps rustup if needed). See `scripts/install.sh --help` for `--ref`, `--prefix`, and `--local`.
+
+### From this repo
+
+With Rust 1.99.1 (pinned in `rust-toolchain.toml`):
+
+```bash
+./scripts/install.sh --local
+# or:
+cargo build --release
+install -m 0755 target/release/mcp-memory ~/.local/bin/mcp-memory
+```
+
+The binary is `target/release/mcp-memory`. Put that path in the harness config, or install it onto `PATH` and use the name `mcp-memory`.
 
 ## Connect a harness
 

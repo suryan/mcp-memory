@@ -6,12 +6,39 @@ Agents store durable statements (preferences, facts, conventions, corrections, r
 
 ## Install
 
-Rust 1.99.1 is pinned in `rust-toolchain.toml`. From this repo:
+No release binaries required — build from source on the machine that will run it.
+Works on **macOS** and **Linux** (including WSL2).
+
+### One-liner (recommended)
 
 ```bash
+curl -fsSL https://raw.githubusercontent.com/suryan/mcp-memory/main/scripts/install.sh \
+  | bash -s -- --yes
+```
+
+What that does:
+
+1. Bootstraps [rustup](https://rustup.rs) if `cargo` is missing  
+2. Clones (or updates) the repo under `~/.local/src/mcp-memory`  
+3. Builds a release binary → `~/.local/bin/mcp-memory`  
+
+```bash
+# options
+curl -fsSL https://raw.githubusercontent.com/suryan/mcp-memory/main/scripts/install.sh -o install-mcp-memory.sh
+bash install-mcp-memory.sh --help
+bash install-mcp-memory.sh --ref v0.2.0 --yes
+```
+
+### From a local clone
+
+```bash
+./scripts/install.sh --local
+# or:
 cargo build --release
 install -m 0755 target/release/mcp-memory ~/.local/bin/mcp-memory
 ```
+
+Rust 1.99.1 is pinned in `rust-toolchain.toml`; `rustup` installs it on the first `cargo` command.
 
 ## Connect a harness
 

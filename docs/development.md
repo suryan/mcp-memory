@@ -23,6 +23,7 @@ Transitive crates that the scanner flagged are replaced in `third_party/` rather
 | `scripts/render-docs.sh` | Render `docs/architecture.d2` and `docs/flow.d2` to PNG with ELK |
 | `scripts/precommit.sh` | clippy, `cargo test`, diagrams, then `osv-scanner` |
 | `scripts/benchmark.sh` | Release-mode load benchmark (writes, recall p95, concurrent recalls) |
+| `scripts/install.sh` | One-liner / local install to `~/.local/bin/mcp-memory` |
 
 ## Benchmark
 
