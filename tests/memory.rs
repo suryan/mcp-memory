@@ -8,7 +8,7 @@ use serde_json::json;
 
 use mcp_memory::access::Actor;
 use mcp_memory::config::{self, Config};
-use mcp_memory::model::EntityInput;
+use mcp_memory::model::{EntityInput, RelationInput};
 use mcp_memory::service::{Draft, Service};
 use mcp_memory::store::Graph;
 
@@ -281,4 +281,36 @@ async fn concurrent_identical_writes_store_one_memory() {
         .await
         .unwrap();
     assert_eq!(listed["memories"].as_array().unwrap().len(), 1);
+}
+
+#[tokio::test]
+async fn unknown_relation_kind_names_the_allowed_kinds() {
+    let dir = tempfile::tempdir().unwrap();
+    let service = service(dir.path(), mcp_memory::access::Access::Learn).await;
+    let rejected = service
+        .remember(
+            Actor::Agent,
+            Draft {
+                explicit: true,
+                title: "Precommit runs cargo".into(),
+                summary: "summary".into(),
+                content: "scripts/precommit.sh runs cargo.".into(),
+                memory_type: "fact".into(),
+                scope: "global".into(),
+                relations: vec![RelationInput {
+                    from: "scripts/precommit.sh".into(),
+                    to: "cargo".into(),
+                    kind: "uses".into(),
+                }],
+                ..Draft::default()
+            },
+        )
+        .await
+        .unwrap();
+    assert_eq!(rejected["action"], "rejected");
+    let reason = rejected["reason"].as_str().unwrap();
+    assert!(reason.contains("\"uses\""), "{reason}");
+    for kind in mcp_memory::model::RELATION_KINDS {
+        assert!(reason.contains(kind), "{kind} missing from {reason}");
+    }
 }

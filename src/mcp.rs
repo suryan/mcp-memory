@@ -74,6 +74,7 @@ struct RememberArgs {
     supersedes: Option<String>,
     #[serde(default)]
     entities: Vec<EntityArg>,
+    /// Typed links between entities. Each kind must be one of the listed relation kinds.
     #[serde(default)]
     relations: Vec<RelationArg>,
 }
@@ -91,8 +92,11 @@ fn other_kind() -> String {
 
 #[derive(Debug, Deserialize, JsonSchema)]
 struct RelationArg {
+    /// Source entity name.
     from: String,
+    /// Target entity name.
     to: String,
+    /// One of `REQUIRES`, `PART_OF`, `RUNS_WITH`, `PREFERS`, `CORRECTS`, `RULED_OUT_FOR` (case-insensitive). The link reads `from` KIND `to`, for example `tests` `REQUIRES` `seeded database`.
     kind: String,
 }
 
@@ -258,6 +262,21 @@ impl ServerHandler for MemoryServer {
                 .await
                 .unwrap_or_else(|error| error.to_string());
             Ok(ReadResourceResult::new(vec![ResourceContents::text(text, uri)]).into())
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::RelationArg;
+    use crate::model::RELATION_KINDS;
+
+    #[test]
+    fn relation_kind_schema_lists_every_allowed_kind() {
+        let schema = serde_json::to_value(schemars::schema_for!(RelationArg)).unwrap();
+        let description = schema["properties"]["kind"]["description"].as_str().unwrap();
+        for kind in RELATION_KINDS {
+            assert!(description.contains(kind), "{kind} missing from {description}");
         }
     }
 }

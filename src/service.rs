@@ -9,7 +9,7 @@ use crate::access::{self, Actor, Intent};
 use crate::config::{self, Config};
 use crate::embed::MODEL_ID;
 use crate::identity::repo_key;
-use crate::model::{EntityInput, MemoryType, RelationInput, Scope, SCHEMA_VERSION};
+use crate::model::{EntityInput, MemoryType, RelationInput, Scope, RELATION_KINDS, SCHEMA_VERSION};
 use crate::secrets;
 use crate::store::{Graph, RememberRequest, Remembered, StoreError};
 
@@ -145,12 +145,16 @@ impl Service {
         if config.require_trust && !config.allows_repo(&repo) && actor == Actor::Agent {
             return Ok(rejected("repository is not trusted"));
         }
-        if draft
+        if let Some(relation) = draft
             .relations
             .iter()
-            .any(|relation| crate::model::relation_kind(&relation.kind).is_none())
+            .find(|relation| crate::model::relation_kind(&relation.kind).is_none())
         {
-            return Ok(rejected("unknown relation kind"));
+            return Ok(rejected(&format!(
+                "unknown relation kind {:?}; use one of {}",
+                relation.kind,
+                RELATION_KINDS.join(", ")
+            )));
         }
         if draft.entities.is_empty() && draft.relations.is_empty() && memory_type.expects_entities() {
             tracing::info!("memory stored without entities");

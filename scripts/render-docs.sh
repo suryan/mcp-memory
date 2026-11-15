@@ -11,6 +11,10 @@ if ! command -v d2 >/dev/null 2>&1; then
   exit 1
 fi
 
+# d2 renders PNGs with Playwright's Chromium (~165 MB). Sandboxed agent shells point
+# PLAYWRIGHT_BROWSERS_PATH at /tmp, a small tmpfs, where the download runs out of space.
+export PLAYWRIGHT_BROWSERS_PATH="$HOME/.cache/ms-playwright"
+
 echo "Rendering docs/architecture.d2"
 d2 --layout=elk docs/architecture.d2 docs/architecture.png
 
