@@ -69,4 +69,4 @@ bash scripts/precommit.sh
 
 ## License
 
-Apache-2.0
+MIT. See [LICENSE](LICENSE).

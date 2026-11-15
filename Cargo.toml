@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 rust-version = "1.97"
 description = "MCP memory server. Statements, entities, and vectors live in an embedded HelixDB graph."
-license = "Apache-2.0"
+license = "MIT"
 publish = false
 
 [dependencies]
