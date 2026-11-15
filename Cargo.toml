@@ -1,6 +1,6 @@
 [package]
 name = "mcp-memory"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 rust-version = "1.97"
 description = "MCP memory server. Statements, entities, and vectors live in an embedded HelixDB graph."
@@ -23,6 +23,7 @@ chrono = { version = "0.4.44", default-features = false, features = ["clock", "s
 uuid = { version = "1.23.0", features = ["v4"] }
 toml = "0.9.8"
 schemars = { version = "1.2.3", features = ["chrono04"] }
+rusqlite = { version = "0.43.0", features = ["bundled"] }
 
 [dev-dependencies]
 tempfile = "3.27.0"

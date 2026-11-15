@@ -79,7 +79,11 @@ mcp-memory search "seed the database" --project-path /path/to/repo
 mcp-memory delete <id>
 mcp-memory export memories.json
 mcp-memory import memories.json
+mcp-memory import-kiro
+mcp-memory import-kiro --path /path/to/memories.db
 ```
+
+`import-kiro` reads every row from Kiro's SQLite database (default `~/.kiro/memories/memories.db`, or `$KIRO_HOME/memories/memories.db`). It keeps Kiro ids, maps `USER_PREFERENCE` to `preference` and other types to `fact`, and maps `Global` / `repo:…` scopes onto ours. Re-running is safe: an unchanged id is skipped. Kiro repo keys look like `github/owner/repo` and may need a `repo_overrides` pin to match a local checkout. Content may be up to 20 KiB.
 
 `export` writes a JSON list of statements. Embeddings are omitted and rebuilt on `import`. Entity edges are omitted. Importing the same id with different content marks that memory `conflicted` and leaves it out of recall. A full copy of the store is the data directory below.
 

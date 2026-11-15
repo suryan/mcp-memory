@@ -50,6 +50,7 @@ mcp-memory show <id>
 mcp-memory delete <id>
 mcp-memory export memories.json
 mcp-memory import memories.json
+mcp-memory import-kiro
 mcp-memory config show
 mcp-memory config set read_only
 ```
@@ -66,6 +67,10 @@ mcp-memory config set read_only
 ```bash
 bash scripts/precommit.sh
 ```
+
+## Changelog
+
+See [CHANGELOG.md](CHANGELOG.md) and [docs/release_notes/0.2.0.md](docs/release_notes/0.2.0.md).
 
 ## License
 

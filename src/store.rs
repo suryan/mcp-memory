@@ -5,13 +5,12 @@ use std::path::Path;
 use helix_db::dsl::prelude::*;
 use helix_db::{Client, HelixDbSource};
 use serde_json::Value;
-use sha2::{Digest, Sha256};
 use thiserror::Error;
 
 use crate::embed::{self, EMBED_DIM};
 use crate::model::{
-    EntityInput, EntityRecord, ExportDocument, MemoryRecord, MemoryType, RelationInput, Scope,
-    SCHEMA_VERSION,
+    content_hash, EntityInput, EntityRecord, ExportDocument, MemoryRecord, MemoryType,
+    RelationInput, Scope, SCHEMA_VERSION,
 };
 use crate::rank::{self, Candidate, RankedHit};
 
@@ -1024,16 +1023,6 @@ fn silence_telemetry() {
 
 fn graph_err(error: impl std::fmt::Display) -> StoreError {
     StoreError::Graph(error.to_string())
-}
-
-fn content_hash(title: &str, summary: &str, content: &str) -> String {
-    let mut hasher = Sha256::new();
-    hasher.update(title.as_bytes());
-    hasher.update([0]);
-    hasher.update(summary.as_bytes());
-    hasher.update([0]);
-    hasher.update(content.as_bytes());
-    format!("{:x}", hasher.finalize())
 }
 
 fn name_key(name: &str) -> String {

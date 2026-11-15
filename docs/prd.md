@@ -41,7 +41,7 @@ A memory is one durable statement, not a chat log.
 - content hash, used for conflict detection
 - embedding of title + summary + content, derived, stored on the memory node and indexed per space
 
-Bounds: title and summary short; content capped (about 4 KB). Over-cap writes fail with a message to split or shorten. No raw transcripts, no pasted file bodies, no scratch task state ("we are on this branch").
+Bounds: title and summary short; content capped at 20 KiB. Over-cap writes fail with a message to split or shorten. No raw transcripts, no pasted file bodies, no scratch task state ("we are on this branch").
 
 Secret-shaped content (private keys, bearer tokens, cloud credential blobs, `.env` secrets) is rejected. The tool error tells the agent to warn the user and not retry with the same secret.
 

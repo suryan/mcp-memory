@@ -9,6 +9,7 @@ pub mod daemon;
 pub mod embed;
 pub mod identity;
 pub mod instructions;
+pub mod kiro;
 pub mod mcp;
 pub mod model;
 pub mod rank;

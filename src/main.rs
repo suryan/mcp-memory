@@ -8,6 +8,7 @@ use clap::{Parser, Subcommand};
 
 use mcp_memory::config::{self, Config};
 use mcp_memory::daemon::{self, CliRequest};
+use mcp_memory::kiro;
 
 #[derive(Parser)]
 #[command(name = "mcp-memory", version, about = "MCP memory backed by a HelixDB graph")]
@@ -47,6 +48,12 @@ enum Command {
     Export { path: PathBuf },
     /// Import a JSON export and rebuild embeddings.
     Import { path: PathBuf },
+    /// Import every memory from Kiro's local SQLite database.
+    ImportKiro {
+        /// Path to `memories.db`. Defaults to `~/.kiro/memories/memories.db`.
+        #[arg(long)]
+        path: Option<PathBuf>,
+    },
     /// Read or change access mode.
     Config {
         #[command(subcommand)]
@@ -139,6 +146,14 @@ async fn run(command: Command) -> Result<(), String> {
         Command::Import { path: file } => {
             let text = std::fs::read_to_string(&file).map_err(|error| error.to_string())?;
             let document = serde_json::from_str(&text).map_err(|error| error.to_string())?;
+            print(&path, CliRequest::Import { document }).await
+        }
+        Command::ImportKiro { path: file } => {
+            let db = file.unwrap_or_else(kiro::default_db_path);
+            let config = Config::load(&path)?;
+            let document = kiro::load_export(&db, &config)?;
+            let document =
+                serde_json::to_value(document).map_err(|error| error.to_string())?;
             print(&path, CliRequest::Import { document }).await
         }
         Command::Config { action } => match action {

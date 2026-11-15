@@ -1,9 +1,10 @@
 //! Memory types, scopes, statuses, limits, and the records exchanged with the graph.
 
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 
 /// Largest content in bytes. Longer text belongs in project docs, not memory.
-pub const CONTENT_LIMIT: usize = 4 * 1024;
+pub const CONTENT_LIMIT: usize = 20 * 1024;
 /// Largest title in characters.
 pub const TITLE_LIMIT: usize = 160;
 /// Largest summary in characters.
@@ -225,6 +226,17 @@ pub struct EdgeRecord {
     pub to_id: String,
     /// Memory id that asserted the link.
     pub evidence_id: String,
+}
+
+/// SHA-256 of title, summary, and content, with null separators. Detects divergent imports.
+pub fn content_hash(title: &str, summary: &str, content: &str) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(title.as_bytes());
+    hasher.update([0]);
+    hasher.update(summary.as_bytes());
+    hasher.update([0]);
+    hasher.update(content.as_bytes());
+    format!("{:x}", hasher.finalize())
 }
 
 /// The JSON written by `export` and read by `import`.
