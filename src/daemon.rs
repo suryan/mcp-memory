@@ -38,7 +38,7 @@ const DEFAULT_IDLE: Duration = Duration::from_secs(300);
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 enum Hello {
-    Mcp { cwd: Option<String> },
+    Mcp,
     Cli { request: CliRequest },
 }
 
@@ -260,8 +260,8 @@ async fn handle(stream: UnixStream, service: Arc<Service>, owner: u32) -> Result
         return Ok(());
     }
     match serde_json::from_str::<Hello>(&line).map_err(text)? {
-        Hello::Mcp { cwd } => {
-            let running = MemoryServer::new(service, cwd)
+        Hello::Mcp => {
+            let running = MemoryServer::new(service)
                 .serve((reader, write))
                 .await
                 .map_err(text)?;
@@ -410,11 +410,8 @@ async fn pump(
 /// Fails when the store process cannot be reached or stdout cannot be written.
 pub async fn proxy_stdio(config_path: &Path) -> Result<(), String> {
     let stream = connect(config_path).await?;
-    let cwd = std::env::current_dir()
-        .ok()
-        .map(|path| path.display().to_string());
     let (read, mut write) = stream.into_split();
-    send_hello(&mut write, &Hello::Mcp { cwd }).await?;
+    send_hello(&mut write, &Hello::Mcp).await?;
     tokio::spawn(async move {
         let _ = pump(tokio::io::stdin(), &mut write).await;
         let _ = write.shutdown().await;

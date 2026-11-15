@@ -51,7 +51,7 @@ Recall for a turn returns only **global** memories plus memories for the **repos
 
 Repo key, in order: normalized git remote (`host/path`, lowercase host, strip `.git`), else the canonical realpath of the repo root. Remote-based keys are what a later team sync will use. Path-only keys are local aliases and must not be treated as portable.
 
-Which repos are in play, in order: `project_path` on the tool call, else MCP [roots](https://modelcontextprotocol.io), else the server process cwd. Multi-root sessions search the union. Each hit is labeled with its scope and repo.
+Which repo is in play: `project_path` on the tool call, and nothing else. Without it, recall covers global memories only and writes are stored as global. The server cwd says nothing about the agent's repo, and MCP roots are deprecated as of the 2026-07-28 spec (SEP-2577). Each hit is labeled with its scope and repo.
 
 A config override can pin `repo_key` when origin is a fork or missing.
 

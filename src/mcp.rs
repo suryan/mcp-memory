@@ -22,22 +22,12 @@ use crate::service::{Draft, Service};
 #[derive(Clone)]
 pub struct MemoryServer {
     service: Arc<Service>,
-    /// The harness's working directory. The shared process runs elsewhere, so
-    /// its own directory says nothing about the repository in play.
-    default_path: Option<String>,
 }
 
 impl MemoryServer {
-    /// A session whose recall and writes default to `default_path`.
-    pub fn new(service: Arc<Service>, default_path: Option<String>) -> Self {
-        Self {
-            service,
-            default_path,
-        }
-    }
-
-    fn project_path(&self, requested: Option<String>) -> Option<String> {
-        requested.or_else(|| self.default_path.clone())
+    /// A session over the shared service. Repository context comes only from `project_path`.
+    pub fn new(service: Arc<Service>) -> Self {
+        Self { service }
     }
 }
 
@@ -45,7 +35,7 @@ impl MemoryServer {
 struct RecallArgs {
     /// The task, in the agent's own words.
     query: String,
-    /// Repository path. Defaults to the harness working directory.
+    /// Absolute path of the repository being worked in. Omit it and only global memories are recalled.
     #[serde(default)]
     project_path: Option<String>,
     /// Optional memory types to keep.
@@ -61,11 +51,12 @@ struct RememberArgs {
     content: String,
     #[serde(rename = "type")]
     memory_type: String,
-    /// `global` or `repository`.
+    /// `global` or `repository`. A repository memory needs `project_path`; without it the memory is stored as global.
     scope: String,
     /// True when the user asked to store or change this memory.
     #[serde(default)]
     explicit: bool,
+    /// Absolute path of the repository the memory is about.
     #[serde(default)]
     project_path: Option<String>,
     #[serde(default)]
@@ -113,6 +104,7 @@ struct ListArgs {
     memory_type: Option<String>,
     #[serde(default)]
     text: Option<String>,
+    /// Keep global memories and this repository's. Omit it to list every memory.
     #[serde(default)]
     project_path: Option<String>,
 }
@@ -126,10 +118,9 @@ struct GraphArgs {
 impl MemoryServer {
     #[tool(description = "Recall active memories for the current task. Returns no hits when nothing is relevant.")]
     async fn memory_recall(&self, Parameters(args): Parameters<RecallArgs>) -> String {
-        let project_path = self.project_path(args.project_path);
         match self
             .service
-            .recall(Actor::Agent, &args.query, project_path.as_deref(), &args.types)
+            .recall(Actor::Agent, &args.query, args.project_path.as_deref(), &args.types)
             .await
         {
             Ok(value) => value.to_string(),
@@ -167,7 +158,7 @@ impl MemoryServer {
                     content: args.content,
                     memory_type: args.memory_type,
                     scope: args.scope,
-                    project_path: self.project_path(args.project_path),
+                    project_path: args.project_path,
                     id: args.id,
                     supersedes: args.supersedes,
                     entities,
@@ -238,7 +229,7 @@ impl ServerHandler for MemoryServer {
         std::future::ready(Ok(ListResourcesResult::with_all_items(vec![{
             let mut resource = Resource::new("memory://digest", "digest");
             resource.description = Some(
-                "Titles and summaries for global memories and the current repository".into(),
+                "Titles and summaries of global memories".into(),
             );
             resource
         }])))
@@ -251,14 +242,13 @@ impl ServerHandler for MemoryServer {
     ) -> impl std::future::Future<Output = Result<rmcp::model::ReadResourceResponse, ErrorData>> + Send
     {
         let service = Arc::clone(&self.service);
-        let default_path = self.default_path.clone();
         let uri = request.uri;
         async move {
             if uri != "memory://digest" {
                 return Err(ErrorData::invalid_params("unknown memory resource", None));
             }
             let text = service
-                .digest(default_path.as_deref())
+                .digest()
                 .await
                 .unwrap_or_else(|error| error.to_string());
             Ok(ReadResourceResult::new(vec![ResourceContents::text(text, uri)]).into())

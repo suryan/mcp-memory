@@ -39,7 +39,7 @@ pub struct Draft {
     pub memory_type: String,
     /// `global` or `repository`.
     pub scope: String,
-    /// Repository path. Defaults to the current directory.
+    /// Repository path. Without one the memory is stored as global.
     pub project_path: Option<String>,
     /// Update this memory in place.
     pub id: Option<String>,
@@ -139,11 +139,18 @@ impl Service {
         }
         let memory_type = MemoryType::parse(&draft.memory_type)
             .ok_or_else(|| ServiceError::Message(format!("unknown type {}", draft.memory_type)))?;
-        let scope = Scope::parse(&draft.scope)
+        let requested = Scope::parse(&draft.scope)
             .ok_or_else(|| ServiceError::Message(format!("unknown scope {}", draft.scope)))?;
         let repo = Self::repo(&config, draft.project_path.as_deref());
-        if config.require_trust && !config.allows_repo(&repo) && actor == Actor::Agent {
-            return Ok(rejected("repository is not trusted"));
+        let scope = if repo.is_some() { requested } else { Scope::Global };
+        if let Some(repo) = &repo {
+            if scope == Scope::Repository
+                && config.require_trust
+                && !config.allows_repo(repo)
+                && actor == Actor::Agent
+            {
+                return Ok(rejected("repository is not trusted"));
+            }
         }
         if let Some(relation) = draft
             .relations
@@ -170,7 +177,7 @@ impl Service {
                 content: draft.content,
                 memory_type,
                 scope,
-                repo_key: repo,
+                repo_key: repo.unwrap_or_default(),
                 space_id: config.space_id,
                 principal_id: config.principal_id,
                 source: if draft.explicit { "user" } else { "automatic" }.into(),
@@ -178,15 +185,21 @@ impl Service {
                 relations: draft.relations,
             })
             .await?;
-        Ok(match remembered {
+        let mut result = match remembered {
             Remembered::Created { id } => json!({"action": "created", "id": id, "titles": []}),
             Remembered::Updated { id } => json!({"action": "updated", "id": id}),
             Remembered::Superseded { id } => json!({"action": "superseded", "id": id}),
             Remembered::Duplicate { id } => json!({"action": "duplicate", "id": id}),
-        })
+        };
+        result["scope"] = json!(scope.as_str());
+        if requested != scope {
+            result["note"] = json!("no project_path, so the memory was stored as global");
+        }
+        Ok(result)
     }
 
     /// Recall active memories for a query: global plus the repository at `project_path`.
+    /// Without a path only global memories are searched.
     ///
     /// # Errors
     ///
@@ -202,12 +215,12 @@ impl Service {
         if let Err(denied) = access::authorize(config.access, actor, Intent::Read) {
             return Ok(json!({"action": "disabled", "reason": denied.reason, "hits": []}));
         }
-        let repo = Self::repo(&config, project_path);
+        let repos: Vec<String> = Self::repo(&config, project_path).into_iter().collect();
         let hits = self
             .graph
             .recall(
                 &config.space_id,
-                &[repo],
+                &repos,
                 query,
                 types,
                 config.recall_limit,
@@ -263,7 +276,7 @@ impl Service {
         if let Err(denied) = access::authorize(config.access, actor, Intent::Read) {
             return Ok(json!({"action": "disabled", "reason": denied.reason, "memories": []}));
         }
-        let repo = project_path.map(|path| Self::repo(&config, Some(path)));
+        let repo = Self::repo(&config, project_path);
         let memories = self
             .graph
             .list(
@@ -307,20 +320,20 @@ impl Service {
         Ok(json!({"action": "recalled", "entity": entity, "items": items}))
     }
 
-    /// Titles and summaries for global memories and the repository, about 2 KB at most.
+    /// Titles and summaries of global memories, about 2 KB at most. Repository memories
+    /// need a path, which a resource read does not carry.
     ///
     /// # Errors
     ///
     /// Fails when config cannot be read or the graph fails.
-    pub async fn digest(&self, project_path: Option<&str>) -> Result<String, ServiceError> {
+    pub async fn digest(&self) -> Result<String, ServiceError> {
         let config = self.load()?;
         if access::authorize(config.access, Actor::Agent, Intent::Read).is_err() {
             return Ok("memory is off".into());
         }
-        let repo = Self::repo(&config, project_path);
         let memories = self
             .graph
-            .list(&config.space_id, None, Some(&repo), None, None)
+            .list(&config.space_id, Some("global"), None, None, None)
             .await?;
         let mut lines = Vec::new();
         let mut used = 0usize;
@@ -366,12 +379,13 @@ impl Service {
         Ok(json!({"action": "imported", "count": count}))
     }
 
-    fn repo(config: &Config, project_path: Option<&str>) -> String {
-        let path = project_path.map_or_else(
-            || std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")),
-            PathBuf::from,
-        );
-        repo_key(&path, &config.repo_overrides)
+    /// The repository key for a caller-supplied path. The server never guesses one:
+    /// it runs in its own directory, unrelated to the caller's.
+    fn repo(config: &Config, project_path: Option<&str>) -> Option<String> {
+        project_path
+            .map(str::trim)
+            .filter(|path| !path.is_empty())
+            .map(|path| repo_key(Path::new(path), &config.repo_overrides))
     }
 }
 

@@ -314,3 +314,77 @@ async fn unknown_relation_kind_names_the_allowed_kinds() {
         assert!(reason.contains(kind), "{kind} missing from {reason}");
     }
 }
+
+#[tokio::test]
+async fn without_a_path_writes_are_global_and_recall_skips_repositories() {
+    let dir = tempfile::tempdir().unwrap();
+    let service = service(dir.path(), mcp_memory::access::Access::Learn).await;
+    let pathless = service
+        .remember(
+            Actor::Agent,
+            Draft {
+                explicit: true,
+                title: "Lint before commit".into(),
+                summary: "Run the linter before every commit".into(),
+                content: "Run the linter before every commit.".into(),
+                memory_type: "convention".into(),
+                scope: "repository".into(),
+                ..Draft::default()
+            },
+        )
+        .await
+        .unwrap();
+    assert_eq!(pathless["action"], "created");
+    assert_eq!(pathless["scope"], "global");
+    assert!(pathless["note"].is_string(), "{pathless}");
+
+    let scoped = service
+        .remember(
+            Actor::Agent,
+            Draft {
+                explicit: true,
+                title: "Seed before tests".into(),
+                summary: "Seed the database before integration tests".into(),
+                content: "Seed the database before integration tests.".into(),
+                memory_type: "fact".into(),
+                scope: "repository".into(),
+                project_path: Some("/tmp/repo-a".into()),
+                ..Draft::default()
+            },
+        )
+        .await
+        .unwrap();
+    assert_eq!(scoped["scope"], "repository");
+    assert!(scoped.get("note").is_none(), "{scoped}");
+
+    let titles = |value: &serde_json::Value| -> Vec<String> {
+        value["titles"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|title| title.as_str().unwrap().to_string())
+            .collect()
+    };
+    let global_only = service
+        .recall(Actor::Agent, "seed database integration tests lint commit", None, &[])
+        .await
+        .unwrap();
+    assert_eq!(titles(&global_only), vec!["Lint before commit"]);
+
+    let with_repo = service
+        .recall(
+            Actor::Agent,
+            "seed database integration tests lint commit",
+            Some("/tmp/repo-a"),
+            &[],
+        )
+        .await
+        .unwrap();
+    let mut found = titles(&with_repo);
+    found.sort();
+    assert_eq!(found, vec!["Lint before commit", "Seed before tests"]);
+
+    let digest = service.digest().await.unwrap();
+    assert!(digest.contains("Lint before commit"), "{digest}");
+    assert!(!digest.contains("Seed before tests"), "{digest}");
+}

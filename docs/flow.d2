@@ -15,7 +15,7 @@ HelixDB: {
 "Coding harness" -> "Stdio front end": "launch over stdio"
 "Stdio front end" -> "Store process": "connect to socket, or start it and wait"
 "Store process" -> HelixDB: "take lock, open graph (first start only)"
-"Stdio front end" -> "Store process": "hello with harness working directory"
+"Stdio front end" -> "Store process": "hello"
 
 "Coding harness" -> "Stdio front end": "memory_recall(query)"
 "Stdio front end" -> "Store process": "forward MCP request"

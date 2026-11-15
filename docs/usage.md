@@ -32,7 +32,7 @@ The server sends its own instructions. For a client that drops them, the same po
 
 Cursor, Claude Code, Codex, and the CLI can all use the store at the same time. Each harness's `mcp-memory` process forwards to one shared store process, which is the only process that opens the graph. The first harness or CLI command starts it. It exits five minutes after the last connection closes; set `MCP_MEMORY_IDLE_SECS` to change that. Its log is `daemon.log` in the data directory.
 
-Recall without `project_path` uses the directory the harness started `mcp-memory` in. After rebuilding the binary, the new version is used once the old store process has exited.
+After rebuilding the binary, the new version is used once the old store process has exited.
 
 ## Access
 
@@ -63,9 +63,9 @@ Leave out chat transcripts, file bodies, one-off task instructions, anything alr
 - `memory_forget` — delete one memory by id. There is no delete-by-query.
 - `memory_list` — browse what is stored. This is not task recall.
 - `memory_graph` — entities linked to a name, and the memories that cite them.
-- `memory://digest` — titles and summaries for global memories and the current repository.
+- `memory://digest` — titles and summaries of global memories.
 
-Pass `project_path` when the harness knows the repo. Otherwise the server uses its working directory. Recall returns global memories plus that repository, and nothing from a different repo.
+The agent passes `project_path`, the absolute path of the repository it is working in, to `memory_recall` and `memory_remember`. The server does not guess a repository: harnesses start it in different directories (Cursor uses your home directory), and the store process runs in the data directory. With a path, recall returns global memories plus that repository, and nothing from a different repo. Without one, recall returns only global memories, and a write is stored as global even when it asks for `scope: repository`; the result then says `"scope": "global"` with a note. The server instructions tell agents to pass the path.
 
 ## Human CLI
 
