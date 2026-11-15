@@ -22,6 +22,19 @@ Transitive crates that the scanner flagged are replaced in `third_party/` rather
 |---|---|
 | `scripts/render-docs.sh` | Render `docs/architecture.d2` and `docs/flow.d2` to PNG with ELK |
 | `scripts/precommit.sh` | clippy, `cargo test`, diagrams, then `osv-scanner` |
+| `scripts/benchmark.sh` | Release-mode load benchmark (writes, recall p95, concurrent recalls) |
+
+## Benchmark
+
+`tests/load_bench.rs` is ignored by default so ordinary `cargo test` stays fast. Run it with:
+
+```bash
+bash scripts/benchmark.sh
+```
+
+It opens an on-disk Helix store in a temp directory, loads a fixture through `import_json` (default 500 memories across 10 repos; unique ids so near-duplicate detection does not collapse the set), warms recall, then measures sequential recall latency and 50 concurrent recalls. It fails if write rate is under 20/s, recall p95 is over 300 ms, or a concurrent recall errors — the PRD single-node gates at this smaller fixture size. Override size with `MCP_MEMORY_BENCH_WRITES`, `MCP_MEMORY_BENCH_RECALLS`, `MCP_MEMORY_BENCH_CONCURRENT`, `MCP_MEMORY_BENCH_REPOS`, and `MCP_MEMORY_BENCH_WARMUP`. Set `MCP_MEMORY_BENCH_FAIL_ON_GATE=0` to print metrics without failing.
+
+This is not the full PRD million-node / 100-space gate; that remains a larger run you opt into by raising the write count.
 
 ## Run
 
